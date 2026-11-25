@@ -39,6 +39,8 @@ def session_env(tool: str) -> dict:
         # bili-cli falls back to reading the user's own browser cookies with
         # browser-cookie3, which on Windows finds them without HOME. Shadow that
         # module so the import fails and bili-cli uses only its saved login.
+        # The same directory's sitecustomize.py makes bili-cli honour
+        # HTTPS_PROXY / HTTP_PROXY, which its HTTP libraries otherwise skip.
         env["PYTHONPATH"] = str(Path(__file__).parent / "no_browser_cookies")
     return env
 
