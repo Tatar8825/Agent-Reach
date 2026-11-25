@@ -93,3 +93,63 @@ def test_existing_cloakbrowser_copy_is_repaired_only_when_broken(monkeypatch, tm
     monkeypatch.setattr(tools, "_private_version", lambda tool: "0.6.3")
     tools.ensure("cloakbrowser")
     assert installed == (["cloakbrowser"] if reinstall else [])
+
+
+_FAKE_AIOHTTP = '''
+class ClientSession:
+    def __init__(self, *args, trust_env=False, **kwargs):
+        self.trust_env = trust_env
+'''
+
+_FAKE_BILIBILI_API = '''
+class _Settings:
+    def __init__(self):
+        self.values = {"proxy": ""}
+
+    def get(self, key):
+        return self.values[key]
+
+    def set_proxy(self, proxy):
+        self.values["proxy"] = proxy
+
+
+request_settings = _Settings()
+'''
+
+_PROXY_PROBE = (
+    "import aiohttp, bilibili_api;"
+    "print(repr(bilibili_api.request_settings.get('proxy')));"
+    "print(aiohttp.ClientSession().trust_env, aiohttp.ClientSession(trust_env=False).trust_env)"
+)
+
+
+def _run_bili_cli_python(tmp_path, monkeypatch, **proxy_env):
+    import subprocess
+    import sys
+
+    fakes = tmp_path / "fakes"
+    (fakes / "bilibili_api").mkdir(parents=True)
+    (fakes / "aiohttp.py").write_text(_FAKE_AIOHTTP, encoding="utf-8")
+    (fakes / "bilibili_api" / "__init__.py").write_text(_FAKE_BILIBILI_API, encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    env = {k: v for k, v in os.environ.items() if "proxy" not in k.lower()}
+    env.update(sessions.session_env("bili-cli"))
+    env["PYTHONPATH"] = os.pathsep.join([env["PYTHONPATH"], str(fakes)])
+    env.update(proxy_env)
+    result = subprocess.run([sys.executable, "-c", _PROXY_PROBE], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    return result.stdout.split()
+
+
+def test_bili_cli_uses_the_configured_proxy(tmp_path, monkeypatch):
+    out = _run_bili_cli_python(tmp_path, monkeypatch, HTTPS_PROXY="http://127.0.0.1:7890")
+    assert out == ["'http://127.0.0.1:7890'", "True", "False"]
+
+
+def test_bili_cli_without_proxy_is_unchanged(tmp_path, monkeypatch):
+    assert _run_bili_cli_python(tmp_path, monkeypatch) == ["''", "False", "False"]
+
+
+def test_bili_cli_respects_no_proxy_for_bilibili(tmp_path, monkeypatch):
+    out = _run_bili_cli_python(tmp_path, monkeypatch, HTTPS_PROXY="http://127.0.0.1:7890", NO_PROXY="bilibili.com")
+    assert out[0] == "''"
