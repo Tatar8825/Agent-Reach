@@ -200,7 +200,8 @@ class BilibiliChannel(Channel):
             "Video title, uploader, description and stats",
             (Param("target", "BV id or video link"),),
             (("bili-cli", "_cli_read"), ("bilibili-api", "_api_read")),
-            live_test={"target": "BV1GJ411x7h7"},
+            # av2, one of Bilibili's first videos; the old test video now returns -404.
+            live_test={"target": "BV1xx411c7mD"},
         ),
         Action(
             "hot",
@@ -214,7 +215,8 @@ class BilibiliChannel(Channel):
             "Subtitle text of the first video part, when available (may need a Bilibili login)",
             (Param("target", "BV id or video link"),),
             (("bili-cli", "_cli_subtitle"),),
-            live_test={"target": "BV1GJ411x7h7"},
+            # A speech-heavy CCTV news episode, so Bilibili's AI subtitles exist.
+            live_test={"target": "BV1UryjzsEa4"},
         ),
     )
 
